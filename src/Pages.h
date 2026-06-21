@@ -26,6 +26,7 @@
 #include <QFileInfo>
 #include <QStandardPaths>
 #include <QRegularExpression>
+#include <QPointer>
 #include "InstallWorker.h"
 class WelcomePage : public QWidget
 {
@@ -203,7 +204,6 @@ signals:
 
 private slots:
     void sendInput();
-    void sendYN(const QString &choice);
     void updateProgress(const QString &message);
     void installationFinished(bool success, const QString &message);
     void onChrootEntered();

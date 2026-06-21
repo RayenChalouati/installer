@@ -116,7 +116,11 @@ void ObsidianOSInstaller::goBack()
 
 void ObsidianOSInstaller::goNext()
 {
-    validateCurrentPage();
+    if (m_currentPage >= 11) {
+        close();
+        return;
+    }
+
     if (m_currentPage == 1) {
         DiskSelectionPage *diskPage = qobject_cast<DiskSelectionPage*>(m_pages[1]);
         QString selectedDisk = diskPage->getSelectedDisk();
@@ -144,26 +148,6 @@ void ObsidianOSInstaller::goNext()
     }
 }
 
-void ObsidianOSInstaller::validateCurrentPage()
-{
-    if (m_currentPage == 1) {
-        DiskSelectionPage *diskPage = qobject_cast<DiskSelectionPage*>(m_pages[1]);
-        QString selectedDisk = diskPage->getSelectedDisk();
-        if (selectedDisk.isEmpty() || selectedDisk == "ERROR") {
-            QMessageBox::warning(this, "Validation Error", "Please select a valid disk for installation.");
-            return;
-        }
-    }
-    if (m_currentPage == 8) {
-        UserPage *userPage = qobject_cast<UserPage*>(m_pages[8]);
-        QPair<bool, QString> result = userPage->validate();
-        if (!result.first) {
-            QMessageBox::warning(this, "Validation Error", result.second);
-            return;
-        }
-    }
-}
-
 void ObsidianOSInstaller::updateButtons()
 {
     m_backButton->setEnabled(m_currentPage > 0 && m_currentPage < 10);
@@ -181,8 +165,6 @@ void ObsidianOSInstaller::updateButtons()
         m_nextButton->setIcon(QIcon::fromTheme("application-exit"));
         m_installButton->hide();
         m_backButton->setEnabled(false);
-        disconnect(m_nextButton, &QPushButton::clicked, this, &ObsidianOSInstaller::goNext);
-        connect(m_nextButton, &QPushButton::clicked, this, &ObsidianOSInstaller::close);
     } else {
         m_nextButton->show();
         m_nextButton->setText("Continue");
@@ -235,6 +217,7 @@ void ObsidianOSInstaller::startInstallation()
     UserPage *userPage = qobject_cast<UserPage*>(m_pages[8]);
     InstallationPage *installationPage = qobject_cast<InstallationPage*>(m_pages[10]);
 
+    disconnect(installationPage, &InstallationPage::installationComplete, this, &ObsidianOSInstaller::installationFinished);
     connect(installationPage, &InstallationPage::installationComplete, this, &ObsidianOSInstaller::installationFinished);
 
     installationPage->startInstallation(
@@ -263,6 +246,8 @@ void ObsidianOSInstaller::installationFinished(bool success, const QString &mess
         updateButtons();
 
         FinishedPage *finishedPage = qobject_cast<FinishedPage*>(m_pages[11]);
+        disconnect(finishedPage, &FinishedPage::restartSystem, this, &ObsidianOSInstaller::restartSystem);
+        disconnect(finishedPage, &FinishedPage::showLog, this, &ObsidianOSInstaller::showLog);
         connect(finishedPage, &FinishedPage::restartSystem, this, &ObsidianOSInstaller::restartSystem);
         connect(finishedPage, &FinishedPage::showLog, this, &ObsidianOSInstaller::showLog);
     } else {
@@ -285,7 +270,8 @@ void ObsidianOSInstaller::restartSystem()
 void ObsidianOSInstaller::showLog()
 {
     InstallationPage *installationPage = qobject_cast<InstallationPage*>(m_pages[10]);
-    QString logText = installationPage->findChild<QTextEdit*>("log-output")->toPlainText();
+    QTextEdit *logOutput = installationPage ? installationPage->findChild<QTextEdit*>("log-output") : nullptr;
+    QString logText = logOutput ? logOutput->toPlainText() : "No log data available.";
 
     QDialog *dialog = new QDialog(this);
     dialog->setWindowTitle("Installation Log");

@@ -27,7 +27,6 @@ public:
 private slots:
     void goBack();
     void goNext();
-    void validateCurrentPage();
     void updateButtons();
     void updateSummary();
     void startInstallation();

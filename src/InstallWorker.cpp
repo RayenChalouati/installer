@@ -371,6 +371,5 @@ void InstallWorker::sendConfigs()
 
     for (const QString &cmd : commands) {
         sendInput(cmd);
-        QThread::msleep(200);
     }
 }

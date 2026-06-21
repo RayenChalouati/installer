@@ -112,7 +112,7 @@ void DiskSelectionPage::scanDisks()
 
     QProcess process;
     process.start("lsblk", {"-d", "-n", "-o", "NAME,SIZE,MODEL"});
-    process.waitForFinished();
+    process.waitForFinished(5000);
     QString output = process.readAllStandardOutput();
     QStringList lines = output.split('\n');
     for (const QString &line : lines) {
@@ -429,7 +429,7 @@ LocalePage::LocalePage(QWidget *parent)
     m_localeList->setMinimumHeight(300);
     QProcess process;
     process.start("ls", {"/usr/share/locale"});
-    process.waitForFinished();
+    process.waitForFinished(5000);
     QString output = process.readAllStandardOutput();
     QStringList locales = output.split('\n');
     for (const QString &loc : locales) {
@@ -470,6 +470,9 @@ void LocalePage::filterLocales()
 void LocalePage::onLocaleSelected(QListWidgetItem *item)
 {
     m_selectedLocale = item->text().trimmed();
+    if (!m_selectedLocale.contains('.')) {
+        m_selectedLocale.append(".UTF-8");
+    }
 }
 
 TimezonePage::TimezonePage(QWidget *parent)
@@ -501,7 +504,7 @@ TimezonePage::TimezonePage(QWidget *parent)
     m_tzList->setMinimumHeight(300);
     QProcess process;
     process.start("timedatectl", {"list-timezones"});
-    process.waitForFinished();
+    process.waitForFinished(5000);
     QString output = process.readAllStandardOutput();
     QStringList timezones = output.split('\n');
     for (const QString &tz : timezones) {
@@ -697,7 +700,7 @@ KeyboardPage::KeyboardPage(QWidget *parent)
     m_kbList->setMinimumHeight(300);
     QProcess process;
     process.start("localectl", {"list-keymaps"});
-    process.waitForFinished();
+    process.waitForFinished(5000);
     QString output = process.readAllStandardOutput();
     QStringList keyboards = output.split('\n');
     for (const QString &kb : keyboards) {
@@ -970,8 +973,13 @@ void InstallationPage::startInstallation(const QString &disk, const QString &ima
         m_isYNPromptActive = true;
     });
 
-    connect(m_worker, &InstallWorker::finished, [this]() {
-        m_worker = nullptr;
+    connect(m_worker, &InstallWorker::finished, this, [this, worker = QPointer<InstallWorker>(m_worker)]() {
+        if (m_worker == worker) {
+            m_worker = nullptr;
+        }
+        if (worker) {
+            worker->deleteLater();
+        }
     });
 
     m_worker->start();
@@ -994,33 +1002,9 @@ void InstallationPage::sendInput()
     }
 }
 
-void InstallationPage::sendYN(const QString &choice)
-{
-    m_logText->append(QString(">>> %1").arg(choice));
-    if (m_worker) {
-        m_worker->sendInput(choice);
-    }
-    m_questionLabel->hide();
-    m_yesButton->hide();
-    m_noButton->hide();
-    m_inputField->show();
-    m_sendButton->show();
-    m_isYNPromptActive = false;
-    m_inputField->clear();
-}
-
 void InstallationPage::updateProgress(const QString &message)
 {
     m_statusLabel->setText("Installation in progress...");
-    if (message.contains("Do you want to chroot into slot 'a' to make changes before copying it to slot B? (y/N):")) {
-        m_questionLabel->show();
-        m_yesButton->show();
-        m_noButton->show();
-        m_inputField->hide();
-        m_sendButton->hide();
-        m_isYNPromptActive = true;
-    }
-
     m_logText->append(message);
     QTextCursor cursor = m_logText->textCursor();
     cursor.movePosition(QTextCursor::End);
@@ -1046,10 +1030,17 @@ void InstallationPage::installationFinished(bool success, const QString &message
 void InstallationPage::onChrootEntered()
 {
     QMessageBox::StandardButton reply = QMessageBox::question(
-        this, "Chroot", "You are now in chroot. Do you still want to be in chroot?",
+        this, "Chroot", "You are now in chroot. Apply system customizations (locale, timezone, keyboard, user account)?",
         QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes
     );
-    if (reply == QMessageBox::No) {
+    if (reply == QMessageBox::Yes) {
+        if (m_worker) {
+            m_worker->sendConfigs();
+        }
+    } else {
+        if (m_worker) {
+            m_worker->sendInput("exit");
+        }
     }
 }
 

@@ -1,6 +1,5 @@
 #include <QApplication>
 #include <QDir>
-#include <QStyleFactory>
 #include "ObsidianOSInstaller.h"
 #include "Common.h"
 
